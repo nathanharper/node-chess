@@ -1,17 +1,44 @@
 <head>
+    <link rel="stylesheet" type="text/css" href="/script/chess.css" media="all" />
     <script src="/socket.io/socket.io.js"></script>
     <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
     <script type="text/javascript" src="/script/chess-client.js"></script>
 </head>
 <body>
-    <h1>Welcome to Chess!</h1>
-    <form method="" action="" name="username_form">
-        <label>Please enter your username.</label>
-        <input type="text" name="username" />
-        <input type="submit" value="OK" name="username_submit" />
+    <div id="wrap">
+        <div id="body">
+            <div id="sidebar">
+                <div id="sidebar-contents" style="display:none;"></div>
+            </div>
 
-        <br /><br />
-        <label>Enter a game to join:</label> <input type="text" name="game" />
-        <input type="button" value="Join!" id="join-game" />
-    </form>
+            <div id="content">
+                <h1 id="welcome">Welcome to Chess!</h1>
+                <form method="" action="" name="username_form">
+                    
+                    <div id="alerts"></div>
+                    <div id="errors"></div>
+
+                    <div id="enter-nick">
+                        <label>Please enter your username.</label>
+                        <input type="text" name="username" />
+                        <input type="submit" value="OK" name="username_submit" />
+                        <br />
+                        <p>Must fit the format: "/^[a-z0-9_]+$/i".</p>
+                    </div>
+
+                    <div id="thank-you" style="display:none;">
+                        <p>Thank you! You are now registered on the chess server. Select a user on the left to start a game with them.</p>
+                    </div>
+
+                    <div id="game-arena">
+                    </div>
+
+                    <!-- <br /><br /> -->
+                    <!-- <label>Enter a game to join:</label> <input type="text" name="game" /> -->
+                    <!-- <input type="button" value="Join!" id="join-game" /> -->
+                    <!-- <input type="button" value="Start!" id="start-game" /> -->
+                </form>
+            </div>
+        </div>
+    </div>
 </body>

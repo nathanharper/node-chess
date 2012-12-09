@@ -38,18 +38,55 @@ socket.on('connect', function() {
         client.on('set nick', function(nick) {
             client.nick = get_unique_nickname(nick, client.id);
             users[client.id].nick = client.nick;
-            client.send('Your unique username is: ' + client.nick);
+            client.emit('nick complete');
+
+            update_nicklist(); // Once client has registered a username, update everybody's nicklist
         });
 
-        // Register for a game
-        client.on('register', function(game_name) {
-            do_chess_command('game register ' + game_name, client);
+        // Register for a game.
+        // The parameter is the id of the opponent.
+        // The second registrant will also send us the game_name
+        client.on('register', function(data) {
+
+            if (!data.game_name) {
+                data.game_name = client.id + '__' + data.user_id; // I'm guessing that this will probably be "good enough" 
+                // users[data.user_id].emit('challenge', {'nick':client.nick, 'id':client.id});
+
+                socket.write(
+                    'game register ' + data.game_name + ' ' + (client.nick ? client.nick : client.id),
+                    function() {
+                        // Make a record of a new game.
+                        // 1 indicates that the user has registered, 0 if not.
+                        games[data.game_name] = {};
+                        games[data.game_name][client.id] = 1;
+                        games[data.game_name][data.user_id] = 0;
+
+                        client.emit('alert', 'A challenge has been sent to ' + users[data.user_id].nick + '!');
+                        users[data.user_id].emit(
+                            'challenge',
+                            {'nick':client.nick, 'id':client.id, 'game':data.game_name}
+                        );
+                    } 
+                );
+            }
+            else {
+                socket.write(
+                    'game register ' + data.game_name + ' ' + (client.nick ? client.nick : client.id),
+                    function() {
+                        games[data.game_name][client.id] = 1;
+                        socket.write('game start ' + data.game_name + ' ' + users[data.user_id].nick);
+                    } 
+                );
+            }
+
+            // do_chess_command(, client);
+
         });
 
         // start a game
-        client.on('start game', function(game) {
-            do_chess_command('game start ' + game, client);
-        });
+        // client.on('start game', function(game) {
+        //     do_chess_command('game start ' + game, client);
+        // });
 
         // Client has attempted to move a piece
         client.on('make move', function(data) {
@@ -66,12 +103,24 @@ socket.on('connect', function() {
 
     // process.stdout.write('Connected!\n\n');
 
-}).on('data', function(data) {
-    // Process data received from Chess Server
-    process.stdout.write(data + '\n');
 }).on('end', function() {
     process.stdout.write('Disconnecting\n');
-});
+}).on('data', function(data) {
+
+    /**
+     * [chrome]It is your move
+     * <:=:>[fox]It is chrome's move
+     * <:=:>White moves first
+     **/
+    var parts = data.split(/\<\:\=\:\>|\n/);
+
+    if (parts.length > 1) {
+        // We received a board position!
+        for (var key in parts) {
+            process.stdout.write('\n' + parts[key] + '\n');
+        }
+    }
+}).setEncoding('utf8');
 
 // Process HTTP request and route to correct page
 function site_router(req, res) {
@@ -115,11 +164,47 @@ function get_unique_nickname(nick, client_id) {
 // and send a message to other users they were playing games with
 function user_cleanup(id) {
     delete users[id];
+    for (var key in games) {
+        if (games[key][id]) {
+            delete games[key][id];
+        }
+    }
 }
 
 // All commands to the chess server need the client name at the end.
 function do_chess_command(cmd, client) {
-    socket.write(cmd + ' ' + (client.nick ? client.nick : client.id));
+    socket.write(cmd + ' ' + (client.nick ? client.nick : client.id), 'utf8', callback);
+}
+
+// CALLBACKS -- the following functions are for handling data returned by the chess server.
+function register_callback(data) {
+    // EX:
+    // [chrome]registered as player 1 for game aWqZEU2Z4ASd2ely1YSc__g8BXuRxVI-6DaSxk1YSb. You are White
+}
+function start_callback(data) {
+}
+
+// Update nicklist for all clients
+function update_nicklist() {
+    var html = '';
+    for (var key in users) {
+        if (users[key].nick) {
+            html += '<a href="javascript:void(0);"'
+                + 'onclick="Client.joinGame(\'' + key + '\');"' 
+                + ' class="nick-name" >' + 
+                users[key].nick 
+                + '</a><br />';
+        }
+    }
+    websocket.sockets.emit('nicklist', html);
+    // fs.readFile('templates/nicklist.html', 'utf8', function(err, html) {
+    //     if (err) return;
+    //     // html = mustache.render(html, {'users':websocket.sockets, 'games':games});
+
+    //     // For now, just emit the same thing to all clients --
+    //     // later we can figure out a way to tailor the unique html.
+    //     websocket.sockets.emit('nicklist', html);
+    // });
 }
 
 // GENERAL TODO: namespacing sockets would be a good choice.
