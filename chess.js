@@ -11,11 +11,12 @@ var chess_port = process.argv[2] || 1234, // chess server port
 
     // Dependencies!!! use npm to get these.
     io = require('socket.io'), // websockets
-    // mustache = require('mustache'), // templates
+    mustache = require('mustache'), // templates
 
     // Set up other globals we'll need
     socket = net.createConnection(chess_port), // connect to chess server
     users = {}, // to store all connected clients
+    nicks = {}, // Just a quick lookup to get user ids by name
     games = {}, // to store all the games and the associated client ids
     websocket; // This will store the web connection
 
@@ -38,6 +39,7 @@ socket.on('connect', function() {
         client.on('set nick', function(nick) {
             client.nick = get_unique_nickname(nick, client.id);
             users[client.id].nick = client.nick;
+            nicks[nick] = client.id;
             client.emit('nick complete');
 
             update_nicklist(); // Once client has registered a username, update everybody's nicklist
@@ -112,24 +114,113 @@ socket.on('connect', function() {
      * <:=:>[fox]It is chrome's move
      * <:=:>White moves first
      **/
-    var parts = data.split(/\<\:\=\:\>|\n/);
+    // [fox]It is your move
+    // [chrome]It is fox's move
+    // White moves first
+    //  8 <BYELLOW><bBLACK> R <BBLUE><bBLACK> H <BYELLOW><bBLACK> B <BBLUE><bBLACK> Q <BYELLOW><bBLACK> K <BBLUE><bBLACK> B <BYELLOW><bBLACK> H <BBLUE><bBLACK> R <NORMAL>
+    //  7 <BBLUE><bBLACK> P <BYELLOW><bBLACK> P <BBLUE><bBLACK> P <BYELLOW><bBLACK> P <BBLUE><bBLACK> P <BYELLOW><bBLACK> P <BBLUE><bBLACK> P <BYELLOW><bBLACK> P <NORMAL>
+    //  6 <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <NORMAL>
+    //  5 <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <NORMAL>
+    //  4 <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <NORMAL>
+    //  3 <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <BBLUE>   <BYELLOW>   <NORMAL>
+    //  2 <BYELLOW><bWHITE> P <BBLUE><bWHITE> P <BYELLOW><bWHITE> P <BBLUE><bWHITE> P <BYELLOW><bWHITE> P <BBLUE><bWHITE> P <BYELLOW><bWHITE> P <BBLUE><bWHITE> P <NORMAL>
+    //  1 <BBLUE><bWHITE> R <BYELLOW><bWHITE> H <BBLUE><bWHITE> B <BYELLOW><bWHITE> Q <BBLUE><bWHITE> K <BYELLOW><bWHITE> B <BBLUE><bWHITE> H <BYELLOW><bWHITE> R <NORMAL>
+    //     a  b  c  d  e  f  g  h
+
+    // Split up the data on newlines and the weird delimiter thing
+    // that the chess server uses ( <:=:> )
+    var parts = data.split(/(?:\<\:\=\:\>|\n)+/);
 
     if (parts.length > 1) {
+
+        var fixed_str,
+            counter = 8,
+            players = [],
+            matches,
+            messages = [],
+            client,
+            params = {
+                'rows' : [],
+                'square' : render_board_row,
+                'count' : function() {
+                    return function(text, render) {
+                        return counter--;
+                    };
+                }
+            };
+
         // We received a board position!
         for (var key in parts) {
-            process.stdout.write('\n' + parts[key] + '\n');
+            if (parts[key].length) {
+                if (parts[key].substr(0,1) == '[') {
+                    matches = /^\[([^\]]+)\](.*)$/g.exec(parts[key]);
+                    if (matches && matches[1] && matches[2]) {
+                        client = get_user_by_nick(matches[1]);
+                        if (client) {
+                            // client.emit('alert', matches[2]);
+                            players.push(client);
+                            messages[client.nick] = matches[2];
+                        }
+                    }
+                }
+                else if (parts[key].match(/^\s\d/)) {
+                    // Must be a board row
+                    // render_board_row(parts[key]);
+                    fixed_str = parts[key].substr(3).replace('<NORMAL>', '');
+                    params.rows.push(fixed_str.match(/<(?:BYELLOW|BBLUE)>(?:<b(?:WHITE|BLACK)>\s[A-Z])?/g));
+                }
+                else {
+                    // some stuff we don't care about
+                }
+            }
         }
+
+        // Render the board with Mustache and send both users the board / message
+        fs.readFile('templates/board.html', 'utf8', function(err, html) {
+            if (err) return;
+            html = mustache.render(html, params);
+            for (var i in players) {
+                players[i].emit('board position', {'board':html, 'message':messages[players[i].nick]});
+            }
+        });
     }
 }).setEncoding('utf8');
+
+// Function for use in mustache templates -- converts Chess format to HTML
+function render_board_row() {
+    return function(text, render) {
+        var str = '<td class="',
+            attr;
+        if (text.indexOf('<BYELLOW>') >= 0) {
+            str += 'yellow">';
+        } else {
+            str += 'blue">';
+        }
+
+        attr = /<b(WHITE|BLACK)> ([A-Z])/.exec(text);
+        if (attr && attr[1] && attr[2]) {
+            str += '<div class="piece ' + attr[1] + '-' + attr[2] + '"></div>';
+        }
+
+        str += '</td>';
+        return str;
+    };
+}
+
+// Use the nicks list to lookup the actual user
+function get_user_by_nick(nick) {
+    if (nicks[nick]) {
+        return users[nicks[nick]] || false;
+    }
+    return false;
+}
 
 // Process HTTP request and route to correct page
 function site_router(req, res) {
     if (req.url.match(/^\/script\/./i)) {
         // if the first piece of the unparsed path indicates a script,
         // load the specified script file from the client-side js folder.
-        var file_name = req.url.replace(/^\/script\/([a-z_\-]+)/i, function(match, $1) {
-            return $1;
-        });
+        var file_name = req.url.replace(/^\/script\/([a-z_\-\.]+)/i, function(match, $1) { return $1; });
         if (file_name) {
             fs.readFile('client/' + file_name, 'utf8', function(err, data) {
                 if (err) return;
@@ -140,6 +231,18 @@ function site_router(req, res) {
         else {
             console.log('No valid filename');
         }
+    }
+    else if (req.url.match(/^\/image\/./i)) {
+        // Load images
+        // This regex gets the file name and the extension
+        var img = req.url.replace(/^\/image\/([a-z_\-]+)\.([a-z]+)/i, function(str, $1, $2) { 
+            return {'name':$1, 'ext':$2}; 
+        });
+        fs.readFile('images/' + img.name + '.' + img.ext, 'binary', function(err, data) {
+            if (err) return;
+            res.writeHead(200, {'Content-Type': 'image/' + img.ext});
+            res.end(data, 'binary');
+        });
     }
     else {
         fs.readFile('templates/login.html', 'utf8', function(err, data) {
