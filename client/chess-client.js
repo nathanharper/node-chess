@@ -14,9 +14,8 @@ var Client = function() {
 
     // User has received a game challenge
     socket.on('challenge', function(data) {
-        console.log(data);
         if (confirm(data.nick + ' has challenged you to a duel! Do you accept?')) {
-            Client.joinGame(data.id, data.game);
+            Client.acceptChallenge(data.game);
         }
         else {
             socket.emit('challenge denied', data);
@@ -81,7 +80,12 @@ var Client = function() {
 
         // Try to register for a game withe the specified user.
         'joinGame' : function(user_id, game_name) {
-            socket.emit('register', {'user_id':user_id, 'game_name':game_name});
+            socket.emit('register first', user_id);
+        },
+
+        // Accept a challenge
+        'acceptChallenge' : function(game_name) {
+            socket.emit('register second', game_name);
         },
 
         // Try to set the user nickname

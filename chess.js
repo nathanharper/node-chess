@@ -12,6 +12,7 @@ var chess_port = process.argv[2] || 1234, // chess server port
     // Dependencies!!! use npm to get these.
     io = require('socket.io'), // websockets
     mustache = require('mustache'), // templates
+    // proxy = require('http-proxy'), // proxy server
 
     // Set up other globals we'll need
     socket = net.createConnection(chess_port), // connect to chess server
@@ -45,50 +46,47 @@ socket.on('connect', function() {
             update_nicklist(); // Once client has registered a username, update everybody's nicklist
         });
 
-        // Register for a game.
+        // Register for a game as player 1.
         // The parameter is the id of the opponent.
-        // The second registrant will also send us the game_name
-        client.on('register', function(data) {
+        client.on('register first', function(user_id) {
+            var game_name = client.id + '__' + user_id, // I'm guessing that this will probably be "good enough" 
+                cmd = 'game register ' + game_name + ' ' + client.nick;
 
-            if (!data.game_name) {
-                data.game_name = client.id + '__' + data.user_id; // I'm guessing that this will probably be "good enough" 
-                // users[data.user_id].emit('challenge', {'nick':client.nick, 'id':client.id});
+            socket.write(
+                cmd, 
+                function() {
+                    games[game_name] = {};
+                    games[game_name][client.id] = 1;
+                    games[game_name][user_id] = 0;
 
-                socket.write(
-                    'game register ' + data.game_name + ' ' + (client.nick ? client.nick : client.id),
-                    function() {
-                        // Make a record of a new game.
-                        // 1 indicates that the user has registered, 0 if not.
-                        games[data.game_name] = {};
-                        games[data.game_name][client.id] = 1;
-                        games[data.game_name][data.user_id] = 0;
-
-                        client.emit('alert', 'A challenge has been sent to ' + users[data.user_id].nick + '!');
-                        users[data.user_id].emit(
-                            'challenge',
-                            {'nick':client.nick, 'id':client.id, 'game':data.game_name}
-                        );
-                    } 
-                );
-            }
-            else {
-                socket.write(
-                    'game register ' + data.game_name + ' ' + (client.nick ? client.nick : client.id),
-                    function() {
-                        games[data.game_name][client.id] = 1;
-                        socket.write('game start ' + data.game_name + ' ' + users[data.user_id].nick);
-                    } 
-                );
-            }
-
-            // do_chess_command(, client);
-
+                    // client.emit('alert', 'A challenge has been sent to ' + users[user_id].nick + '!');
+                    users[user_id].emit(
+                        'challenge',
+                        {'nick':client.nick, 'id':client.id, 'game':game_name}
+                    );
+                }
+            );
         });
 
-        // start a game
-        // client.on('start game', function(game) {
-        //     do_chess_command('game start ' + game, client);
-        // });
+        // Register for a game as player 2.
+        // The parameter is the game name.
+        client.on('register second', function(game_name) {
+            var user_id, key, cmd;
+            for (key in games[game_name]) {
+               if (key != client.id) {
+                  user_id = key;
+               }
+            } 
+
+            cmd = 'game register ' + game_name + ' ' + client.nick;
+            socket.write(
+                cmd,
+                function() {
+                    games[game_name][client.id] = 1;
+                    socket.write('game start ' + game_name + ' ' + users[user_id].nick);
+                }
+            );
+        });
 
         // Client has attempted to move a piece
         client.on('make move', function(data) {
@@ -129,6 +127,7 @@ socket.on('connect', function() {
 
     // Split up the data on newlines and the weird delimiter thing
     // that the chess server uses ( <:=:> )
+    // [zumbo]registered as player 2 for game eoWroKInPJ2NDBp8WxtJ__BCW18tGlEotzP2GfWxtI. You are Black
     var parts = data.split(/(?:\<\:\=\:\>|\n)+/);
 
     if (parts.length > 1) {
@@ -184,11 +183,15 @@ socket.on('connect', function() {
             }
         });
     }
+    else {
+        process.stdout.write(data);
+    }
 }).setEncoding('utf8');
 
 // Function for use in mustache templates -- converts Chess format to HTML
 function render_board_row() {
     return function(text, render) {
+        process.stdout.write(text);
         var str = '<td class="',
             attr;
         if (text.indexOf('<BYELLOW>') >= 0) {
