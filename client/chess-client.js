@@ -36,14 +36,9 @@ var Client = function() {
     });
 
     socket.on('board position', function(data) {
-        $('#game-arena #board1').text(data.board);
+        $('#game-arena #board1').html(data.board);
         Client.error(data.message);
     });
-    // Normal server interaction will just be handled as normal 'messages'.
-    // This event type is for handling data that comes in from the Chess server.
-    // socket.on('chess data', function(data) {
-    //     console.log(data);
-    // });
 
     // We received a signal to update the nicklist
     socket.on('nicklist', function(html) {

@@ -6,27 +6,30 @@
 .nick-name { cursor:pointer; }
 #alerts { color:green; }
 #errors { color:red; }
-.king-b,
-.king-w,
-.bishop-b,
-.bishop-w,
-.queen-w,
-.rook-w,
-.pawn-w,
-.knight-w,
-.queen-b,
-.knight-b,
-.rook-b,
-.pawn-b{background-image:url(../images/pieces.png);background-repeat:no-repeat}
-.king-b{background-position:0px 0px;width:29px;height:45px;}
-.king-w{background-position:-29px 0px;width:31px;height:44px;}
-.bishop-b{background-position:-60px 0px;width:30px;height:42px;}
-.bishop-w{background-position:0px -45px;width:29px;height:41px;}
-.queen-w{background-position:-29px -45px;width:30px;height:40px;}
-.rook-w{background-position:-59px -45px;width:29px;height:38px;}
-.pawn-w{background-position:-90px 0px;width:27px;height:36px;}
-.knight-w{background-position:-117px 0px;width:30px;height:36px;}
-.queen-b{background-position:-117px -36px;width:28px;height:35px;}
-.knight-b{background-position:-90px -36px;width:26px;height:32px;}
-.rook-b{background-position:0px -86px;width:24px;height:31px;}
-.pawn-b{background-position:-24px -86px;width:22px;height:28px;}
+.BLACK-K,
+.WHITE-K,
+.BLACK-B,
+.WHITE-B,
+.WHITE-Q,
+.WHITE-R,
+.WHITE-P,
+.WHITE-H,
+.BLACK-Q,
+.BLACK-H,
+.BLACK-R,
+.BLACK-P{background-image:url(/images/pieces.png);background-repeat:no-repeat}
+.BLACK-K{background-position:0px 0px;width:29px;height:45px;}
+.WHITE-K{background-position:-29px 0px;width:31px;height:44px;}
+.BLACK-B{background-position:-60px 0px;width:30px;height:42px;}
+.WHITE-B{background-position:0px -45px;width:29px;height:41px;}
+.WHITE-Q{background-position:-29px -45px;width:30px;height:40px;}
+.WHITE-R{background-position:-59px -45px;width:29px;height:38px;}
+.WHITE-P{background-position:-90px 0px;width:27px;height:36px;}
+.WHITE-H{background-position:-117px 0px;width:30px;height:36px;}
+.BLACK-Q{background-position:-117px -36px;width:28px;height:35px;}
+.BLACK-H{background-position:-90px -36px;width:26px;height:32px;}
+.BLACK-R{background-position:0px -86px;width:24px;height:31px;}
+.BLACK-P{background-position:-24px -86px;width:22px;height:28px;}
+td .board-square { width:50px; height:50px; }
+.yellow { background-color:yellow; }
+.blue { background-color:blue; }

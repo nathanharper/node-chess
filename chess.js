@@ -107,6 +107,7 @@ socket.on('connect', function() {
     process.stdout.write('Disconnecting\n');
 }).on('data', function(data) {
 
+    // TODO: replace socket.write callbacks with cases here
     /**
      * [chrome]It is your move
      * <:=:>[fox]It is chrome's move
@@ -191,19 +192,24 @@ socket.on('connect', function() {
 // Function for use in mustache templates -- converts Chess format to HTML
 function render_board_row() {
     return function(text, render) {
-        process.stdout.write(text);
         var str = '<td class="',
+            rendered = render(text),
             attr;
-        if (text.indexOf('<BYELLOW>') >= 0) {
+        process.stdout.write(rendered + '\n');
+        if (rendered.indexOf('&lt;BYELLOW&gt;') >= 0) {
             str += 'yellow">';
         } else {
             str += 'blue">';
         }
 
-        attr = /<b(WHITE|BLACK)> ([A-Z])/.exec(text);
+        str += '<div class="board-square">';
+
+        attr = /&lt;b(WHITE|BLACK)&gt; ([A-Z])/.exec(rendered);
         if (attr && attr[1] && attr[2]) {
             str += '<div class="piece ' + attr[1] + '-' + attr[2] + '"></div>';
         }
+
+        str += '</div>'; // end "board-square"
 
         str += '</td>';
         return str;
@@ -220,31 +226,41 @@ function get_user_by_nick(nick) {
 
 // Process HTTP request and route to correct page
 function site_router(req, res) {
-    if (req.url.match(/^\/script\/./i)) {
-        // if the first piece of the unparsed path indicates a script,
-        // load the specified script file from the client-side js folder.
-        var file_name = req.url.replace(/^\/script\/([a-z_\-\.]+)/i, function(match, $1) { return $1; });
-        if (file_name) {
-            fs.readFile('client/' + file_name, 'utf8', function(err, data) {
-                if (err) return;
-                res.writeHead(200, {'Content-Type': 'text/javascript'});
-                res.end(data, "utf8");
-            });
-        }
-        else {
-            console.log('No valid filename');
-        }
-    }
-    else if (req.url.match(/^\/image\/./i)) {
-        // Load images
-        // This regex gets the file name and the extension
-        var img = req.url.replace(/^\/image\/([a-z_\-]+)\.([a-z]+)/i, function(str, $1, $2) { 
-            return {'name':$1, 'ext':$2}; 
+    // TODO: use node-static or something
+    var shortened = req.url.substr(1);
+    if (req.url.match(/^\/images\/[a-z\-_]+\.png$/)) {
+        fs.exists(shortened, function(exists) {
+            if (exists) {
+                res.writeHead(200, {'Content-Type': 'image/png'});
+                var readStream = fs.createReadStream(shortened);
+
+                readStream.on('open', function () {
+                    readStream.pipe(res);
+                });
+                readStream.on('error', function(err) {
+                    res.end(err);
+                });
+            }
+            else {
+                res.writeHead(404, {'Content-Type': 'text/html'});
+                res.end('Not Found', 'utf8');
+            }
         });
-        fs.readFile('images/' + img.name + '.' + img.ext, 'binary', function(err, data) {
-            if (err) return;
-            res.writeHead(200, {'Content-Type': 'image/' + img.ext});
-            res.end(data, 'binary');
+    }
+    else if (req.url.match(/^\/client\/[a-z\-_]+\.(js|css)$/)) {
+        fs.exists(shortened, function(exists) {
+            if (exists) {
+                fs.readFile(req.url.substr(1), 'utf8', function(err, data) {
+                    if (err) return;
+                    var ext = req.url.replace(/^.*\.(css|js)$/, function(str,$1){return $1;});
+                    res.writeHead(200, {'Content-Type': 'text/' + (ext == 'js' ? 'javascript' : 'css')});
+                    res.end(data, "utf8");
+                });
+            }
+            else {
+                res.writeHead(404, {'Content-Type': 'text/html'});
+                res.end('Not Found', 'utf8');
+            }
         });
     }
     else {
