@@ -8,8 +8,8 @@ var Client = function() {
         console.log(msg);
     });
 
-    socket.on('alert', function(msg) {
-        Client.alert(msg);
+    socket.on('notify', function(msg) {
+        Client.notify(msg);
     });
 
     // User has received a game challenge
@@ -28,16 +28,24 @@ var Client = function() {
     });
 
     socket.on('disconnect', function() {
-        Client.error('disconnected');
+        Client.failure('disconnected');
     });
 
-    socket.on('error', function(err) {
-        Client.error(err);
+    socket.on('failure', function(err) {
+        Client.failure(err);
     });
 
     socket.on('board position', function(data) {
         $('#game-arena #board1').html(data.board);
-        Client.error(data.message);
+        $('.draggable').draggable({
+            'grid' : [50, 50],
+            'revert' : 'invalid',
+            'containment' : '#' + data.game_name
+        });
+        $('.droppable').droppable();
+        if (data.message) {
+            Client.failure(data.message);
+        }
     });
 
     // We received a signal to update the nicklist
@@ -59,18 +67,6 @@ var Client = function() {
                 e.preventDefault();
                 Client.setNick($('input[name=username]').val());
             });
-
-            // $('.nick-name').click(function() {
-            //     Client.joinGame($(this).attr('user_id'));
-            // });
-
-            // $('#join-game').click(function() {
-            //     Client.joinGame($('input[name=game]').val());
-            // });
-
-            // $('#start-game').click(function() {
-            //     Client.startGame($('input[name=game]').val());
-            // });
         },
 
         // Try to register for a game withe the specified user.
@@ -87,10 +83,10 @@ var Client = function() {
         'setNick' : function(nick) {
             nick = $.trim(nick);
             if (nick.length < 1) {
-                Client.error('Please enter a nickname.');
+                Client.failure('Please enter a nickname.');
             }
             else if (! nick.match(/^[a-z0-9_]+$/i)) {
-                Client.error('Invalid chars were in your nickname. REJECTED.');
+                Client.failure('Invalid chars were in your nickname. REJECTED.');
             }
             else {
                 socket.emit('set nick', nick);
@@ -106,19 +102,19 @@ var Client = function() {
         // Make a move
         'makeMove' : function(game, start, end) {
             if (!game || !start || !end) {
-                Client.error('Not a valid move.');
+                Client.failure('Not a valid move.');
             }
             else {
                 socket.emit('make move', {'game':game, 'start':start, 'end':end});
             }
         },
 
-        'error' : function(error) {
-            $('#error').html(error);
+        'failure' : function(error) {
+            $('#failure').html(error);
         },
 
-        'alert' : function(msg) {
-            $('#alert').html(msg);
+        'notify' : function(msg) {
+            $('#notify').html(msg);
         }
 
     };

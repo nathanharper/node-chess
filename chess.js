@@ -11,7 +11,7 @@ var chess_port = process.argv[2] || 1234, // chess server port
 
     // Dependencies!!! use npm to get these.
     io = require('socket.io'), // websockets
-    mustache = require('mustache'), // templates
+    // mustache = require('mustache'), // templates
     // proxy = require('http-proxy'), // proxy server
 
     // Set up other globals we'll need
@@ -59,7 +59,7 @@ socket.on('connect', function() {
                     games[game_name][client.id] = 1;
                     games[game_name][user_id] = 0;
 
-                    // client.emit('alert', 'A challenge has been sent to ' + users[user_id].nick + '!');
+                    client.emit('notify', 'A challenge has been sent to ' + users[user_id].nick + '!');
                     users[user_id].emit(
                         'challenge',
                         {'nick':client.nick, 'id':client.id, 'game':game_name}
@@ -131,63 +131,93 @@ socket.on('connect', function() {
     // [zumbo]registered as player 2 for game eoWroKInPJ2NDBp8WxtJ__BCW18tGlEotzP2GfWxtI. You are Black
     var parts = data.split(/(?:\<\:\=\:\>|\n)+/);
 
-    if (parts.length > 1) {
+    if (parts.length > 1) { // This means we got a board position
 
-        var fixed_str,
-            counter = 8,
-            players = [],
-            matches,
+        var players = [],
             messages = [],
-            client,
-            params = {
-                'rows' : [],
-                'square' : render_board_row,
-                'count' : function() {
-                    return function(text, render) {
-                        return counter--;
-                    };
-                }
-            };
+            nicks = [],
+            col = 0,
+            curr_row,
+            curr_block,
+            piece_data,
+            game_name,
+            html = '<table border="0" style="border-collapse:collapse;" cellspacing="0" id="',
+            col_map = ['a','b','c','d','e','f','g','h'];
 
-        // We received a board position!
-        for (var key in parts) {
-            if (parts[key].length) {
-                if (parts[key].substr(0,1) == '[') {
-                    matches = /^\[([^\]]+)\](.*)$/g.exec(parts[key]);
-                    if (matches && matches[1] && matches[2]) {
-                        client = get_user_by_nick(matches[1]);
-                        if (client) {
-                            // client.emit('alert', matches[2]);
-                            players.push(client);
-                            messages[client.nick] = matches[2];
-                        }
-                    }
+        // This will set the data for the 2 players
+        set_player_data(parts.shift(), players, messages, nicks);
+        set_player_data(parts.shift(), players, messages, nicks);
+        parts.shift(); // get rid of the extra line
+
+        // Set the unique id for the table
+        game_name = 'game_' + nicks.join('__');
+        html += game_name + '">';
+
+        // Loop over all board rows
+        for (var row = 8; row > 0; row--) {
+            html += '<tr><td>' + row + '</td>';
+            curr_row = parts.shift()
+                .substr(3)
+                .replace('<NORMAL>', '')
+                .match(/<(?:BYELLOW|BBLUE)>(?:<b(?:WHITE|BLACK)>\s[A-Z])?/g);
+
+            // Loop over all the blocks in this row
+            for (col = 0; col < 8; col++) {
+                html += '<td class="';
+                curr_block = curr_row.shift();
+                process.stdout.write(curr_block + '\n');
+                if (curr_block.indexOf('<BYELLOW>') >= 0) {
+                    html += 'yellow">';
+                } else {
+                    html += 'blue">';
                 }
-                else if (parts[key].match(/^\s\d/)) {
-                    // Must be a board row
-                    // render_board_row(parts[key]);
-                    fixed_str = parts[key].substr(3).replace('<NORMAL>', '');
-                    params.rows.push(fixed_str.match(/<(?:BYELLOW|BBLUE)>(?:<b(?:WHITE|BLACK)>\s[A-Z])?/g));
+
+                // The droppable div to attach the pieces to
+                html += '<div class="board-square droppable" position="' + row + col_map[col] + '">';
+
+                // Create the chess piece
+                piece_data = /\<b(WHITE|BLACK)\> ([A-Z])/.exec(curr_block);
+                if (piece_data) {
+                    html += '<div class="piece draggable ' + piece_data[1] + '-' + piece_data[2] + '"></div>';
                 }
-                else {
-                    // some stuff we don't care about
-                }
+
+                html += '</div>'; // end "board-square"
+
+                html += '</td>';
             }
+
+            html += '</tr>'; // end the row
         }
 
-        // Render the board with Mustache and send both users the board / message
-        fs.readFile('templates/board.html', 'utf8', function(err, html) {
-            if (err) return;
-            html = mustache.render(html, params);
-            for (var i in players) {
-                players[i].emit('board position', {'board':html, 'message':messages[players[i].nick]});
-            }
-        });
+        // Add last row of letters
+        html += '<tr><td>&nbsp;</td>';
+        for (var letter in col_map) {
+            html += '<td>' + col_map[letter] + '</td>';
+        }
+        html += '</tr>';
+
+        for (var i in players) {
+            players[i].emit('board position', {
+                'board':html, 
+                'message':messages[players[i].nick],
+                'game_name' : game_name
+            });
+        }
     }
     else {
         process.stdout.write(data);
     }
 }).setEncoding('utf8');
+
+// helper for generating chess board output
+function set_player_data(string, players, messages, nicks) {
+    var matches = /^\[([^\]]+)\](.*)$/g.exec(string);
+    if (matches) {
+        players.push(get_user_by_nick(matches[1]));
+        nicks.push(matches[1]);
+        messages.push(matches[2]);
+    }
+}
 
 // Function for use in mustache templates -- converts Chess format to HTML
 function render_board_row() {
@@ -202,11 +232,11 @@ function render_board_row() {
             str += 'blue">';
         }
 
-        str += '<div class="board-square">';
+        str += '<div class="board-square droppable" position="">';
 
         attr = /&lt;b(WHITE|BLACK)&gt; ([A-Z])/.exec(rendered);
         if (attr && attr[1] && attr[2]) {
-            str += '<div class="piece ' + attr[1] + '-' + attr[2] + '"></div>';
+            str += '<div class="piece draggable ' + attr[1] + '-' + attr[2] + '"></div>';
         }
 
         str += '</div>'; // end "board-square"
@@ -319,14 +349,6 @@ function update_nicklist() {
         }
     }
     websocket.sockets.emit('nicklist', html);
-    // fs.readFile('templates/nicklist.html', 'utf8', function(err, html) {
-    //     if (err) return;
-    //     // html = mustache.render(html, {'users':websocket.sockets, 'games':games});
-
-    //     // For now, just emit the same thing to all clients --
-    //     // later we can figure out a way to tailor the unique html.
-    //     websocket.sockets.emit('nicklist', html);
-    // });
 }
 
 // GENERAL TODO: namespacing sockets would be a good choice.
